@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "houdini": {
+      "command": "python",
+      "args": ["C:/path/to/houdini-mcp/bridge/houdini_mcp.py"]
+    }
+  }
+}
