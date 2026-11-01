@@ -1,0 +1,21 @@
+{
+  "manifest_version": 3,
+  "name": "History Filler",
+  "version": "0.1.31",
+  "description": "Finds jobs and fills out applications from a profile stored on your computer. You review and submit each one.",
+  "permissions": ["storage", "scripting"],
+  "host_permissions": ["<all_urls>"],
+  "background": { "service_worker": "background.js" },
+  "action": { "default_popup": "popup.html", "default_title": "History Filler" },
+  "options_ui": { "page": "options.html", "open_in_tab": true },
+  "commands": {
+    "fill-employment": {
+      "suggested_key": { "default": "Alt+Shift+E" },
+      "description": "Fill employment history on this page"
+    },
+    "fill-everything": {
+      "suggested_key": { "default": "Alt+Shift+F" },
+      "description": "Fill everything from your profile on this page"
+    }
+  }
+}

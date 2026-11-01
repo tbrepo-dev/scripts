@@ -1,0 +1,13 @@
+{
+  "name": "history-filler",
+  "private": true,
+  "scripts": {
+    "build": "esbuild src/resume-parser.js --bundle --minify --format=iife --target=chrome120 --outfile=resume-parser.bundle.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "*"
+  },
+  "devDependencies": {
+    "esbuild": "*"
+  }
+}

@@ -1,0 +1,52 @@
+History Filler License
+
+Copyright (c) 2026 tbrepo-dev. All rights reserved.
+
+This is a proprietary license. It is not an open-source license. It covers the
+history-filler folder only, not the other folders in this repository.
+
+1. What you may do
+   If the owner has given you a copy of History Filler (the "Software"), you may
+   install it in your own browser and use it for your own job searching.
+
+2. What you may not do
+   Without the owner's written permission you may not copy, share, post, resell,
+   sublicense or distribute the Software or any part of it, and you may not
+   offer a modified version of it to anyone else.
+
+3. Fees
+   The Software is free today. The owner may start charging for it, for any
+   feature of it, or for any version of it released in the future, at any time.
+
+4. Agreement and changes to these terms
+   By installing or using the Software you agree to these terms, and you agree
+   that the owner may change them, including this section and any fees, at any
+   time. A change applies to every version of the Software released after it,
+   and to your continued use after the owner has given notice of it (for
+   example, in the repository or in the Software). Continuing to use the
+   Software after a change means you accept it. If you do not accept a change,
+   stop using the Software and delete your copies.
+
+5. Your accounts, keys and applications
+   The Software works with services run by others, such as Anthropic and
+   Google, and with employers' application sites. Those are governed by their
+   own terms, and you are responsible for following them. Any API key you enter
+   is yours, and any charges on it are yours. The Software fills in forms for
+   you to review: you are responsible for everything you submit.
+
+6. Third-party software
+   resume-parser.bundle.js includes the Anthropic SDK (@anthropic-ai/sdk), which
+   is licensed by Anthropic under its own open-source license. That software
+   stays under that license, and nothing here changes it.
+
+7. No warranty
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+   IMPLIED, INCLUDING WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR
+   PURPOSE AND NON-INFRINGEMENT. IN NO EVENT SHALL THE OWNER BE LIABLE FOR ANY
+   CLAIM, DAMAGES OR OTHER LIABILITY, INCLUDING LOST OPPORTUNITIES OR
+   APPLICATIONS SUBMITTED WITH WRONG OR INCOMPLETE INFORMATION, ARISING FROM THE
+   USE OF THE SOFTWARE.
+
+8. Ending
+   The owner may end your permission to use the Software at any time. When it
+   ends, you must stop using the Software and delete your copies.

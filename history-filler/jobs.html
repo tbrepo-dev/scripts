@@ -1,0 +1,136 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Find jobs - History Filler</title>
+  <style>
+    :root { color-scheme: light dark; --bg: #f5f6f8; --card: #fff; --fg: #1b1f27; --muted: #69707d; --line: #d9dde3; --accent: #2b5fd9; --accent-fg: #fff; --good: #1f7f4a; --warn: #a8650f; }
+    @media (prefers-color-scheme: dark) {
+      :root { --bg: #16181d; --card: #1f2229; --fg: #e8eaee; --muted: #9aa1ad; --line: #3a3f4a; --accent: #5b8af0; --accent-fg: #0e1320; --good: #58c48a; --warn: #e6a64d; }
+    }
+    body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.5 system-ui, sans-serif; }
+    main { max-width: 760px; margin: 0 auto; padding: 28px 16px 64px; }
+    h1 { margin: 0 0 4px; font-size: 22px; }
+    h2 { margin: 28px 0 8px; font-size: 16px; }
+    .hint { margin: 0 0 12px; color: var(--muted); }
+    .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 14px; margin-bottom: 10px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 12px; }
+    .wide { grid-column: 1 / -1; }
+    label { display: block; font-size: 12px; font-weight: 600; color: var(--muted); }
+    label.check { display: flex; gap: 6px; align-items: center; font-size: 13px; font-weight: 400; color: var(--fg); }
+    input[type=text], select { display: block; width: 100%; box-sizing: border-box; margin-top: 3px; padding: 7px 9px; border: 1px solid var(--line); border-radius: 6px; background: var(--card); color: var(--fg); font: 14px/1.4 system-ui, sans-serif; }
+    button { padding: 7px 13px; border: 1px solid var(--line); border-radius: 6px; background: transparent; color: var(--fg); font: inherit; cursor: pointer; }
+    button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); font-weight: 600; }
+    button:disabled { opacity: .55; cursor: default; }
+    .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; align-items: center; }
+    .job { display: flex; gap: 10px; align-items: flex-start; }
+    .job input { margin-top: 4px; }
+    .job-body { min-width: 0; flex: 1; }
+    .job a { color: var(--accent); font-weight: 600; }
+    .meta { color: var(--muted); font-size: 13px; }
+    .tag { display: inline-block; margin-left: 6px; padding: 0 6px; border: 1px solid var(--line); border-radius: 4px; font-size: 11px; color: var(--muted); }
+    .tag.best { border-color: var(--good); color: var(--good); }
+    .status { margin-top: 6px; font-size: 13px; white-space: pre-line; }
+    .status.ok { color: var(--good); }
+    .status.bad { color: var(--warn); }
+    #message { min-height: 20px; white-space: pre-line; }
+    #fillBar { position: sticky; bottom: 0; padding: 10px 0; background: var(--bg); }
+    details summary { cursor: pointer; }
+    #companyList { margin-top: 10px; }
+    .company { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 3px 0; }
+    @media (max-width: 520px) { .grid { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Find jobs</h1>
+    <p class="hint">Search, tick the ones you like, and each application opens in its own tab, filled in. Nothing is ever submitted: you check each tab and click submit yourself.</p>
+
+    <form id="searchForm" class="card">
+      <div class="grid">
+        <label class="wide">Job title
+          <input type="text" id="title" placeholder="Houdini Artist" autocomplete="off">
+        </label>
+        <label>Field
+          <select id="group">
+            <option value="art">VFX, animation and games</option>
+            <option value="tech">Tech and AI</option>
+            <option value="all">All companies</option>
+          </select>
+        </label>
+        <label>Location (optional)
+          <input type="text" id="location" placeholder="Los Angeles, Remote" autocomplete="off">
+        </label>
+      </div>
+      <div class="actions">
+        <button type="submit" id="searchBtn" class="primary">Find 5 jobs</button>
+        <label class="check"><input type="checkbox" id="includeOpened"> Include jobs I've already opened</label>
+      </div>
+    </form>
+
+    <p id="message"></p>
+    <div id="results"></div>
+    <div id="fillBar" hidden>
+      <div class="actions" style="margin-top:0">
+        <button id="fillBtn" class="primary" disabled>Fill selected</button>
+        <button id="moreBtn">Next 5 jobs</button>
+        <span id="position" class="meta"></span>
+      </div>
+    </div>
+
+    <h2>Search these yourself</h2>
+    <div class="card">
+      <p class="hint"><strong>Google Jobs</strong> gathers listings from LinkedIn, Indeed, company career pages and more into one list, and has a Remote filter. It opens with your title and location. The other buttons open the same search on one site. These sites don't let tools read their listings, so you browse them yourself: when you reach an application, click the H icon and "Fill everything".</p>
+      <div class="actions" style="margin-top:0">
+        <button data-site="google" class="primary">Google Jobs</button>
+        <button data-site="yandex">Yandex</button>
+        <button data-site="linkedin">LinkedIn</button>
+        <button data-site="indeed">Indeed</button>
+        <button data-site="artstation">ArtStation</button>
+        <button data-site="indies">Work With Indies</button>
+      </div>
+    </div>
+
+    <h2>More job sources</h2>
+    <details class="card">
+      <summary>Free job feeds</summary>
+      <p class="hint" style="margin-top:10px">These hand over jobs directly, so their results join your search above. Remotive and Remote OK need no sign-up and list remote jobs. Adzuna covers many ordinary listings and needs a free key that you get yourself. Results from a feed link to the feed's own page, where you click through to apply.</p>
+      <label class="check"><input type="checkbox" id="feedRemotive"> Remotive (remote jobs)</label>
+      <label class="check"><input type="checkbox" id="feedRemoteok"> Remote OK (remote jobs)</label>
+      <label class="check"><input type="checkbox" id="feedAdzuna"> Adzuna</label>
+      <div class="grid" style="margin-top:10px">
+        <label>Adzuna app ID <input type="text" id="adzunaId" autocomplete="off"></label>
+        <label>Adzuna app key <input type="password" id="adzunaKey" autocomplete="off"></label>
+        <label>Adzuna country
+          <select id="adzunaCountry">
+            <option value="us">United States</option><option value="ca">Canada</option><option value="gb">United Kingdom</option>
+            <option value="au">Australia</option><option value="nz">New Zealand</option><option value="de">Germany</option>
+            <option value="fr">France</option><option value="nl">Netherlands</option><option value="es">Spain</option>
+            <option value="it">Italy</option><option value="pl">Poland</option><option value="at">Austria</option>
+            <option value="in">India</option><option value="sg">Singapore</option><option value="br">Brazil</option>
+            <option value="mx">Mexico</option><option value="za">South Africa</option>
+          </select>
+        </label>
+      </div>
+      <div class="actions"><button id="adzunaSignup">Open Adzuna's free sign-up</button></div>
+      <p class="hint" style="margin:10px 0 0">Sign up at Adzuna yourself, then paste the app ID and key above. Each person uses their own. The key is stored unencrypted in this browser, and your job title and place are sent to the feeds you turn on. Adzuna's free access is for personal job searching, so selling a service built on it needs Adzuna's written licence. Remotive asks for no more than about 4 reads a day, so its results are kept for 6 hours.</p>
+    </details>
+
+    <h2>Where it looks</h2>
+    <details class="card">
+      <summary><span id="companyCount"></span></summary>
+      <p class="hint" style="margin-top:10px">It searches the companies listed below, which post through Greenhouse, Lever or Ashby, plus any sites you add. Paste a company's careers page link (the address contains greenhouse.io, lever.co or ashbyhq.com), or a Google Sheet that lists jobs. A sheet has to be shared as "Anyone with the link can view", and its first rows need headings like Title, Company and Link (the job's full web address). Sites are added one at a time and checked first: one that can't be read is turned down with the reason. The popup's "Include site to be searched" button does the same. Many big VFX houses use other systems, so they can't be added yet. Sheets are only read, never changed, so please respect whoever made them.</p>
+      <div class="actions" style="margin-top:0">
+        <input type="text" id="addUrl" placeholder="Careers page or Google Sheet link" style="flex:1;min-width:220px;margin-top:0" autocomplete="off">
+        <button id="addBtn">Add site</button>
+      </div>
+      <p id="addMessage" class="hint" style="margin:8px 0 0"></p>
+      <div id="companyList"></div>
+    </details>
+  </main>
+  <script src="job-search.js"></script>
+  <script src="add-site.js"></script>
+  <script src="runner.js"></script>
+  <script src="jobs.js"></script>
+</body>
+</html>

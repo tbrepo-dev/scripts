@@ -1,0 +1,166 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>History Filler profile</title>
+  <style>
+    :root { color-scheme: light dark; --bg: #f5f6f8; --card: #fff; --fg: #1b1f27; --muted: #69707d; --line: #d9dde3; --accent: #2b5fd9; --accent-fg: #fff; }
+    @media (prefers-color-scheme: dark) {
+      :root { --bg: #16181d; --card: #1f2229; --fg: #e8eaee; --muted: #9aa1ad; --line: #3a3f4a; --accent: #5b8af0; --accent-fg: #0e1320; }
+    }
+    body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.5 system-ui, sans-serif; }
+    main { max-width: 760px; margin: 0 auto; padding: 28px 16px 64px; }
+    h1 { margin: 0 0 4px; font-size: 22px; }
+    h2 { margin: 32px 0 4px; font-size: 16px; }
+    .hint { margin: 0 0 12px; color: var(--muted); }
+    .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 14px; margin-bottom: 12px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 12px; }
+    .wide { grid-column: 1 / -1; }
+    label { display: block; font-size: 12px; font-weight: 600; color: var(--muted); }
+    label.check { display: flex; gap: 6px; align-items: center; font-size: 13px; font-weight: 400; color: var(--fg); align-self: end; padding-bottom: 7px; }
+    select { display: block; width: 100%; box-sizing: border-box; margin-top: 3px; padding: 7px 9px; border: 1px solid var(--line); border-radius: 6px; background: var(--card); color: var(--fg); font: 14px/1.4 system-ui, sans-serif; }
+    .checks { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px; margin-top: 8px; }
+    input[type=text], input[type=password], input[type=month], textarea { display: block; width: 100%; box-sizing: border-box; margin-top: 3px; padding: 7px 9px; border: 1px solid var(--line); border-radius: 6px; background: transparent; color: var(--fg); font: 14px/1.4 system-ui, sans-serif; }
+    textarea { min-height: 70px; resize: vertical; }
+    button { padding: 6px 12px; border: 1px solid var(--line); border-radius: 6px; background: transparent; color: var(--fg); font: inherit; cursor: pointer; }
+    button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); font-weight: 600; }
+    button:disabled { opacity: .6; cursor: default; }
+    .bar { display: flex; gap: 6px; justify-content: flex-end; margin-top: 10px; }
+    .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; align-items: center; }
+    #status { color: var(--muted); font-size: 13px; min-height: 20px; white-space: pre-line; }
+    #resumeStatus { white-space: pre-line; margin: 10px 0 0; }
+    #resumeStatus:empty { display: none; }
+    details { margin-top: 12px; }
+    summary { cursor: pointer; }
+    @media (max-width: 520px) { .grid { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Your profile</h1>
+    <p class="hint">Saved only in this browser, and changes save as you type.</p>
+    <p id="status"></p>
+
+    <h2>Resume</h2>
+    <div class="card">
+      <p class="hint">Load a PDF, Word (.docx) or text file. It fills in the sections below, so read them over afterward. The file is also kept here to upload to sites that ask for one.</p>
+      <label>Anthropic API key
+        <input type="password" id="apiKey" placeholder="sk-ant-..." autocomplete="off">
+      </label>
+      <p class="hint" style="margin-top:8px">Reading a resume sends it to Anthropic using your key. The key is also used by "Draft answers to open questions" in the popup, which sends your work history, skills, a cover letter if you saved one, and the job posting. Your email, phone and address are never sent. The key is stored unencrypted in this browser. Nothing else leaves your computer.</p>
+      <div class="actions">
+        <input type="file" id="resumeFile" accept=".pdf,.docx,.txt,.md" hidden>
+        <button id="pickResume" class="primary">Load resume</button>
+        <span id="resumeName" class="hint" style="margin:0"></span>
+      </div>
+      <div id="resumeStatus"></div>
+      <details>
+        <summary>No API key? Use a Claude chat instead</summary>
+        <p class="hint" style="margin-top:8px">Copy the instructions, paste them into a Claude chat with your resume attached, then paste the reply here. This doesn't keep a file for uploading, so add one with "Load resume" if you want that.</p>
+        <button id="copyPrompt">Copy instructions</button>
+        <label style="margin-top:10px">Claude's reply
+          <textarea id="pasteJson" placeholder='{"contact": ...}'></textarea>
+        </label>
+        <div class="actions"><button id="usePaste">Use this reply</button></div>
+      </details>
+    </div>
+
+    <h2>Cover letter</h2>
+    <div class="card">
+      <p class="hint">Optional. This same file goes to every application with a cover letter field, so use one that isn't written for a specific job, or skip this and upload your own each time.</p>
+      <div class="actions">
+        <input type="file" id="coverFile" accept=".pdf,.doc,.docx,.txt,.rtf" hidden>
+        <button id="pickCover">Load cover letter</button>
+        <span id="coverName" class="hint" style="margin:0"></span>
+        <button id="removeCover" hidden>Remove</button>
+      </div>
+      <label style="margin-top:12px">Cover letter text
+        <textarea id="coverText" style="min-height:140px" placeholder="Paste your cover letter here"></textarea>
+      </label>
+      <p class="hint" style="margin:6px 0 0">Some applications have a text box for the letter instead of an upload. This is what goes in it, with each blank line starting a new paragraph. Loading a Word, text or PDF file above fills this in for you.</p>
+      <p id="coverStatus" class="hint" style="margin:6px 0 0"></p>
+    </div>
+
+    <h2>Job tracking sheet</h2>
+    <div class="card">
+      <p class="hint">Optional. When you click Submit on an application this extension filled, it adds a row to your Google Sheet with the position, company and today's date, and leaves Result blank for you. If the sheet has no Position / Company / Date Applied / Result header row, one is added at the top.</p>
+      <label>Google Sheet link
+        <input type="text" id="sheetUrl" placeholder="https://docs.google.com/spreadsheets/d/..." autocomplete="off">
+      </label>
+      <label style="margin-top:10px">Connector link (set up once, below)
+        <input type="text" id="sheetScriptUrl" placeholder="https://script.google.com/macros/s/.../exec" autocomplete="off">
+      </label>
+      <div class="actions">
+        <button id="checkSheet" class="primary">Check sheet</button>
+        <button id="copyConnector">Copy connector script</button>
+      </div>
+      <p id="sheetStatus" class="hint" style="margin:8px 0 0;white-space:pre-line"></p>
+      <details>
+        <summary>Set up the connector (once)</summary>
+        <p class="hint" style="margin-top:8px">The extension can't write to Google Sheets by itself. This small script runs in your own Google account and adds the rows for it.</p>
+        <ol class="hint" style="padding-left:20px">
+          <li>Open your sheet and choose <b>Extensions › Apps Script</b>.</li>
+          <li>Click <b>Copy connector script</b> above, replace everything in the editor with it, and click Save.</li>
+          <li>Click <b>Deploy › New deployment</b>. Click the gear next to "Select type" and pick <b>Web app</b>.</li>
+          <li>Set <b>Execute as</b> to Me and <b>Who has access</b> to Anyone, then click Deploy.</li>
+          <li>Google asks you to allow access. Since it's your own script, it may say Google hasn't verified it: click Advanced, then Go to the project.</li>
+          <li>Copy the <b>Web app URL</b> (it ends in /exec), paste it above, and click <b>Check sheet</b>.</li>
+        </ol>
+        <p class="hint">Anyone who has the connector link could add rows to your sheets, so keep it to yourself like a password. To use a different sheet later, just change the sheet link: the connector works with any sheet you can edit.</p>
+      </details>
+    </div>
+
+    <h2>Contact</h2>
+    <div class="card"><div class="grid" id="contact"></div></div>
+
+    <h2>Employers</h2>
+    <p class="hint">Most recent first, since that's the order forms usually want.</p>
+    <div id="employers"></div>
+    <button id="addEmployer" class="primary">Add employer</button>
+
+    <h2>Education</h2>
+    <div id="education"></div>
+    <button id="addSchool" class="primary">Add school</button>
+
+    <h2>References</h2>
+    <p class="hint">Most resumes don't list these, so you'll probably enter them here. Loading a resume keeps them unless it has its own.</p>
+    <div id="references"></div>
+    <button id="addReference" class="primary">Add reference</button>
+
+    <h2>Skills and years</h2>
+    <p class="hint">Add anything a job might ask about: software, tools, equipment, licences. A question that names it is answered: "Do you have experience with Excel?" gets Yes, and "How many years of Excel experience?" gets the number.</p>
+    <div id="tools"></div>
+    <button id="addTool" class="primary">Add skill</button>
+
+    <h2>Your own answers</h2>
+    <p class="hint">For written questions. When a question contains every word or phrase you list (for example "game credits"), the answer is typed in. Check it before you submit.</p>
+    <div id="customAnswers"></div>
+    <button id="addAnswer" class="primary">Add answer</button>
+
+    <h2>Common questions</h2>
+    <p class="hint">Applications often ask these. Only answers you pick here are filled, and anything left blank is left alone. Read them before you submit, since a form may word a question differently. "Have you worked for this company" starts on No, but if the question names a company in your job history it's flagged for you instead.</p>
+    <div id="commonQuestions"></div>
+    <h3 style="margin:18px 0 6px;font-size:14px">Questions you've taught it</h3>
+    <p class="hint">When an application asks something unusual, open the application, click the H icon, then "Teach a field", click the question, and choose "Always answer Yes" or "No". It's remembered by the question's wording, on every site, and listed here.</p>
+    <div id="taught"></div>
+
+    <h2>Self-identification</h2>
+    <p class="hint">Optional. Forms ask these as voluntary questions. Only answers you pick here are filled, and nothing is guessed or taken from your resume. Anything left blank is left alone on the form. Like the rest of your profile, these are stored unencrypted in this browser.</p>
+    <div id="selfId"></div>
+
+    <h2>Skills</h2>
+    <div class="card"><label>Comma-separated<textarea id="skills"></textarea></label></div>
+
+    <h2>Backup</h2>
+    <p class="hint">Move your profile to another browser, or keep a copy. The file isn't encrypted.</p>
+    <div class="actions">
+      <button id="export">Export JSON</button>
+      <button id="importBtn">Import JSON</button>
+      <input type="file" id="importFile" accept="application/json,.json" hidden>
+    </div>
+  </main>
+  <script src="resume-parser.bundle.js"></script>
+  <script src="sheet-log.js"></script>
+  <script src="options.js"></script>
+</body>
+</html>

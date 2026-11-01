@@ -1,0 +1,59 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    :root { color-scheme: light dark; --bg: #fff; --fg: #1b1f27; --muted: #69707d; --line: #d9dde3; --accent: #2b5fd9; --accent-fg: #fff; --warn: #a8650f; }
+    @media (prefers-color-scheme: dark) {
+      :root { --bg: #1d2027; --fg: #e8eaee; --muted: #9aa1ad; --line: #3a3f4a; --accent: #5b8af0; --accent-fg: #0e1320; --warn: #e6a64d; }
+    }
+    body { width: 290px; margin: 0; padding: 14px; background: var(--bg); color: var(--fg); font: 13px/1.45 system-ui, sans-serif; }
+    h1 { margin: 0 0 2px; font-size: 14px; }
+    #counts { margin: 0 0 12px; color: var(--muted); }
+    button { display: block; width: 100%; padding: 8px 10px; margin-bottom: 6px; border: 1px solid var(--line); border-radius: 6px; background: transparent; color: var(--fg); font: inherit; cursor: pointer; }
+    button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); font-weight: 600; }
+    button:disabled { opacity: .6; cursor: default; }
+    label { display: flex; gap: 6px; align-items: center; margin: 10px 0; }
+    #result { white-space: pre-line; margin: 8px 0 10px; }
+    #result:empty { display: none; }
+    #result.err { color: var(--warn); }
+    .row { display: flex; gap: 6px; }
+    .row button { margin-bottom: 0; }
+  </style>
+</head>
+<body>
+  <h1>History Filler</h1>
+  <p id="counts"></p>
+  <button id="includeSite">Include site to be searched</button>
+  <div id="siteForm" hidden>
+    <input type="text" id="siteUrl" placeholder="Paste a careers page or Google Sheet link" autocomplete="off" style="display:block;width:100%;box-sizing:border-box;margin-bottom:6px;padding:6px 8px;font:inherit">
+    <button id="siteAdd" class="primary">Add this site</button>
+    <p id="siteMsg" style="margin:0 0 8px"></p>
+  </div>
+  <button id="findJobs">Find jobs</button>
+  <button id="fillAll" class="primary">Fill everything</button>
+  <div class="row" style="margin-bottom:6px">
+    <button id="fillEmp">Employers</button>
+    <button id="fillEdu">Education</button>
+    <button id="fillRef">References</button>
+  </div>
+  <button id="flip">Flip order and fill history again</button>
+  <label><input type="checkbox" id="oldestFirst"> Add oldest first on this site (tick if history comes out backwards)</label>
+  <label><input type="checkbox" id="overwrite"> Replace values already in the form</label>
+  <button id="draft" title="Writes a first draft of the free-text questions from your profile and the job posting">Draft answers to open questions</button>
+  <div id="manual" hidden>
+    <p style="margin:0 0 6px">No API key saved. Copy the request, paste it into a Claude chat, then come back here and paste its reply.</p>
+    <button id="copyDraftPrompt">Copy request for Claude</button>
+    <textarea id="draftReply" placeholder="Paste Claude's reply here" style="display:block;width:100%;box-sizing:border-box;min-height:60px;margin-bottom:6px;font:inherit"></textarea>
+    <button id="useDraftReply">Use this reply</button>
+  </div>
+  <div id="result"></div>
+  <div class="row">
+    <button id="teach">Teach a field</button>
+    <button id="edit">Edit profile</button>
+  </div>
+  <script src="job-search.js"></script>
+  <script src="add-site.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>
