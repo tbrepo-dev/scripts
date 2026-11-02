@@ -41,6 +41,18 @@
     <p class="hint">Saved only in this browser, and changes save as you type.</p>
     <p id="status"></p>
 
+    <div class="card">
+      <div class="grid">
+        <label>Profile in use
+          <select id="profilePick"></select>
+        </label>
+        <label>Name of this profile
+          <input type="text" id="profileName" autocomplete="off">
+        </label>
+      </div>
+      <p class="hint" style="margin:8px 0 0">Each profile has its own resume, cover letter, work history, skills and answers. Profile 2 starts with your contact details and answers from Profile 1, then load its own resume. Your API key and job tracking sheet are shared.</p>
+    </div>
+
     <h2>Resume</h2>
     <div class="card">
       <p class="hint">Load a PDF, Word (.docx) or text file. It fills in the sections below, so read them over afterward. The file is also kept here to upload to sites that ask for one.</p>
@@ -161,6 +173,7 @@
   </main>
   <script src="resume-parser.bundle.js"></script>
   <script src="sheet-log.js"></script>
+  <script src="profiles.js"></script>
   <script src="options.js"></script>
 </body>
 </html>

@@ -70,7 +70,6 @@ const COMMON_QUESTIONS = [
   { key: 'heardAbout', label: 'How did you hear about this job?', choices: ['LinkedIn, then Indeed, then Other'], preset: 'LinkedIn, then Indeed, then Other' },
 ];
 const LISTS = ['employers', 'education', 'references', 'tools', 'customAnswers'];
-const blankProfile = () => ({ contact: {}, employers: [], education: [], references: [], tools: [], customAnswers: [], skills: '', selfId: {}, coverLetterText: '' });
 const DECLINE = 'Decline to answer';
 const SELF_ID = [
   { key: 'gender', label: 'Gender identity', multi: true, choices: ['Man', 'Woman', 'Non-binary', DECLINE] },
@@ -576,6 +575,7 @@ $('checkSheet').addEventListener('click', async (e) => {
 if (chrome.storage.onChanged) {
   chrome.storage.onChanged.addListener((changes) => {
     if (changes.answers) renderTaught();
+    if (changes.profileSlots) showProfileSlots();
     if (changes.sheetLast || changes.sheetPending) showSheetStatus();
   });
 }
@@ -585,16 +585,44 @@ chrome.storage.local.get(SHEET_KEYS).then((stored) => {
   showSheetStatus();
 });
 
-chrome.storage.local.get(['profile', 'apiKey', 'resumeFile', 'coverLetterFile']).then((stored) => {
-  if (stored.profile) {
-    profile = { ...blankProfile(), ...stored.profile };
-    if (profile.employers.some((job) => job.location)) {
-      profile.employers = profile.employers.map(splitLocation);
-      chrome.storage.local.set({ profile });
-    }
+async function loadActiveProfile() {
+  const stored = await chrome.storage.local.get(['profile', 'apiKey', 'resumeFile', 'coverLetterFile']);
+  profile = { ...blankProfile(), ...stored.profile };
+  if (profile.employers.some((job) => job.location)) {
+    profile.employers = profile.employers.map(splitLocation);
+    chrome.storage.local.set({ profile });
   }
   if (stored.apiKey) $('apiKey').value = stored.apiKey;
-  if (stored.resumeFile) $('resumeName').textContent = stored.resumeFile.name;
+  $('resumeName').textContent = stored.resumeFile ? stored.resumeFile.name : '';
+  $('resumeStatus').textContent = '';
+  $('coverStatus').textContent = '';
+  $('pasteJson').value = '';
   showCoverLetter(stored.coverLetterFile && stored.coverLetterFile.name);
   renderAll();
+}
+
+// The popup can switch profiles too, so this follows the change from either place.
+let activeSlot;
+async function showProfileSlots() {
+  const slots = await getProfileSlots();
+  fillProfilePick($('profilePick'), slots);
+  if (document.activeElement !== $('profileName')) $('profileName').value = slots.names[slots.active];
+  if (activeSlot === slots.active) return;
+  activeSlot = slots.active;
+  clearTimeout(saveTimer);
+  await loadActiveProfile();
+}
+
+$('profilePick').addEventListener('change', async (e) => {
+  try {
+    clearTimeout(saveTimer);
+    await chrome.storage.local.set({ profile });
+    await switchProfile(Number(e.target.value));
+    setStatus(`Now using ${e.target.selectedOptions[0].text}.`);
+  } catch (err) {
+    setStatus(`Couldn't switch profiles: ${err.message}`);
+  }
 });
+$('profileName').addEventListener('change', (e) => renameProfile(activeSlot, e.target.value));
+
+showProfileSlots();

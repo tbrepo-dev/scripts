@@ -26,6 +26,12 @@ Chrome may show a "developer mode extensions" warning when it starts. That's exp
 
 No API key? Under **Load resume**, use the Claude chat option: copy the instructions, paste them into Claude with your resume, then paste the reply back.
 
+## Two profiles
+
+You can keep two profiles, for example one for VFX jobs and one for social work jobs. Pick one from the list at the top of the popup or the profile page, and rename it on the profile page. Forms fill from whichever one is selected, hotkeys included.
+
+Each has its own resume, cover letter, work history, education, references, skills and answers. The first time you open Profile 2, it copies your contact details and question answers from Profile 1 and leaves the rest blank, so load its resume next. Your API key, job tracking sheet, taught fields and saved job sites are shared. **Export JSON** and **Import JSON** work on the selected profile only.
+
 ## Fill a form
 
 Open the application and click **Fill everything** (or press Alt+Shift+F). Then review the page:

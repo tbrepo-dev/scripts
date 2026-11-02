@@ -48,7 +48,18 @@ async function init() {
   };
   $('counts').textContent = `${count('employers', 'employer')}, ${count('education', 'school')}, ${count('references', 'reference')}`;
   $('overwrite').checked = overwrite;
+  fillProfilePick($('profilePick'), await getProfileSlots());
 }
+
+$('profilePick').addEventListener('change', async (e) => {
+  try {
+    await switchProfile(Number(e.target.value));
+    show('');
+    await init();
+  } catch (err) {
+    show(`Couldn't switch profiles: ${err.message}`, true);
+  }
+});
 
 $('fillAll').addEventListener('click', (e) => runFill({ action: 'fillAll' }, e.currentTarget));
 $('fillEmp').addEventListener('click', (e) => runFill({ action: 'fill', kind: 'emp' }, e.currentTarget));
