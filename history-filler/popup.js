@@ -46,7 +46,10 @@ async function init() {
     const n = (profile[list] || []).length;
     return `${n} ${word}${n === 1 ? '' : 's'}`;
   };
-  $('counts').textContent = `${count('employers', 'employer')}, ${count('education', 'school')}, ${count('references', 'reference')}`;
+  const first = (profile.employers || [])[0];
+  $('counts').textContent = `${count('employers', 'employer')}, ${count('education', 'school')}, ${count('references', 'reference')}`
+    + (first ? `
+First job it fills: ${[first.title, first.company].filter(Boolean).join(', ')}` : '');
   $('overwrite').checked = overwrite;
   fillProfilePick($('profilePick'), await getProfileSlots());
 }
@@ -162,6 +165,33 @@ $('teach').addEventListener('click', async () => {
   const res = await chrome.runtime.sendMessage({ action: 'teach' });
   if (res.error) show(res.error, true);
   else window.close();
+});
+
+// Copies what the open page's form is made of, to paste into a bug report. It
+// holds each box's label, id and markup, but never what was typed into one.
+$('copyLayout').addEventListener('click', async (e) => {
+  e.target.disabled = true;
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    const frames = await chrome.scripting.executeScript({ target: { tabId: tab.id, allFrames: true }, func: describePageLayout });
+    const layout = frames.map((f) => f.result).filter((r) => r && r.boxes.length);
+    await navigator.clipboard.writeText(JSON.stringify({ page: new URL(tab.url).origin + new URL(tab.url).pathname, layout }, null, 1));
+    show(`Copied ${layout.reduce((n, r) => n + r.boxes.length, 0)} boxes. Paste them into the chat.`);
+  } catch (err) {
+    show(`Couldn't read this page: ${err.message}`, true);
+  }
+  e.target.disabled = false;
+});
+
+// F5 only reloads the page, so a page keeps the old copy of the extension. This
+// reloads the page first, then the extension, which closes this window.
+$('reloadAll').addEventListener('click', async (e) => {
+  e.target.disabled = true;
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (tab && /^https?:/.test(tab.url || '')) await chrome.tabs.reload(tab.id);
+  } catch (err) { /* the extension still reloads */ }
+  setTimeout(() => chrome.runtime.reload(), 150);
 });
 
 init();

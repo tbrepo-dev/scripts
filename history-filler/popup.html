@@ -9,7 +9,7 @@
     }
     body { width: 290px; margin: 0; padding: 14px; background: var(--bg); color: var(--fg); font: 13px/1.45 system-ui, sans-serif; }
     h1 { margin: 0 0 2px; font-size: 14px; }
-    #counts { margin: 0 0 12px; color: var(--muted); }
+    #counts { margin: 0 0 12px; color: var(--muted); white-space: pre-line; }
     button { display: block; width: 100%; padding: 8px 10px; margin-bottom: 6px; border: 1px solid var(--line); border-radius: 6px; background: transparent; color: var(--fg); font: inherit; cursor: pointer; }
     button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); font-weight: 600; }
     button:disabled { opacity: .6; cursor: default; }
@@ -53,9 +53,12 @@
     <button id="teach">Teach a field</button>
     <button id="edit">Edit profile</button>
   </div>
+  <button id="reloadAll" style="margin-top:6px" title="Reloads History Filler from its folder, then reloads this page, so the newest version is the one running">Reload extension and this page</button>
+  <button id="copyLayout" style="margin-top:6px" title="Copies the boxes and labels on this page, never what you typed, so a problem with a site can be looked at">Copy this page's layout for a bug report</button>
   <script src="job-search.js"></script>
   <script src="add-site.js"></script>
   <script src="profiles.js"></script>
+  <script src="page-layout.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>

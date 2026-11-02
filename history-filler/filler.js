@@ -3,7 +3,7 @@
 (() => {
   // A tab keeps the copy it was first given even after the extension is reloaded,
   // so a newer build replaces the old one instead of being ignored.
-  const BUILD = "2026-11-01.29";
+  const BUILD = "2026-11-02.6";
   if (window.__HF && window.__HF.build === BUILD) return;
 
   const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July',
@@ -225,6 +225,9 @@
 
   function dateKeyFrom(t, el) {
     const type = (el.getAttribute('type') || '').toLowerCase();
+    // A bare "From*" or "To (Actual or Expected)" is a date, whatever the note says.
+    const bare = t.replace(/\(.*?\)/g, ' ').replace(/[\s*\u2731\u2217]+/g, ' ').trim();
+    if (/^(from|to)$/.test(bare)) return bare === 'from' ? 'startFull' : 'endFull';
     if (/birth|\bdob\b|availab|earliest|desired|can you|able to|expected|today|signature|applic/.test(t)) return null;
     if (/experience|how many|total|number of|salary|\bpay\b|\bper\b/.test(t)) return null;
     const hasMonth = /\bmm\b|month/.test(t);
@@ -940,6 +943,68 @@
     return !!(reply && reply.ok);
   }
 
+  // Date pickers built on react-datepicker (Phenom, CHOA) ignore typed text.
+  // The popup beside the box takes a year from its list and a month by click,
+  // or just a year from a grid.
+  // Returns true or false once it has tried, or null when this isn't one.
+  async function pickMonthInCalendar(el, year, month) {
+    const wrap = el.closest('.react-datepicker-wrapper');
+    if (!wrap) return null;
+    const popup = () => {
+      const next = wrap.nextElementSibling;
+      return next && next.matches('.react-datepicker-popper') ? next : null;
+    };
+    const click = (node) => {
+      for (const type of ['mousedown', 'mouseup', 'click']) {
+        node.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true, view: window }));
+      }
+    };
+    const ready = () => popup() && popup().querySelector('.react-datepicker__month-0, .react-datepicker__year-text');
+    el.focus();
+    for (let i = 0; i < 8 && !ready(); i++) {
+      if (i % 3 === 0) click(el);
+      await sleep(100);
+    }
+    const box = popup();
+    if (!box || !ready()) return null;
+    // Some boxes (school dates) ask for the year alone: a grid of twelve years,
+    // paged with Previous and Next until the one wanted shows.
+    if (!box.querySelector('.react-datepicker__month-0')) {
+      for (let step = 0; step < 14; step++) {
+        const open = popup();
+        if (!open) return false;
+        const cells = [...open.querySelectorAll('.react-datepicker__year-text')];
+        const hit = cells.find((c) => c.textContent.trim() === String(year) && !/--disabled/.test(c.className));
+        if (hit) {
+          click(hit);
+          await sleep(250);
+          return !!el.value.trim();
+        }
+        const shown = cells.map((c) => parseInt(c.textContent, 10)).filter(Boolean);
+        const turn = open.querySelector(year < Math.min(...shown) ? '.react-datepicker__navigation--previous' : '.react-datepicker__navigation--next');
+        if (!turn) return false;
+        click(turn);
+        await sleep(150);
+      }
+      return false;
+    }
+    const years = box.querySelector('select');
+    if (years) {
+      if (![...years.options].some((o) => o.value === String(year))) {
+        el.blur();
+        return false;
+      }
+      setNativeValue(years, String(year));
+      years.dispatchEvent(new Event('change', { bubbles: true }));
+      await sleep(150);
+    }
+    const cell = (popup() || box).querySelector(`.react-datepicker__month-${month - 1}`);
+    if (!cell) return false;
+    click(cell);
+    await sleep(200);
+    return !!el.value.trim();
+  }
+
   // Returns true when the value was set, false when it needs a human.
   async function fillField(el, value) {
     let text = value.text;
@@ -972,6 +1037,8 @@
     // calendar object is told the date directly and fires the site's handlers.
     if (value.date && el.tagName === 'INPUT' && value.part === 'Full') {
       const [y, m] = value.date.split('-');
+      const picked = await pickMonthInCalendar(el, Number(y), Number(m));
+      if (picked !== null) return picked;
       const fp = flatpickrOf(el);
       if (fp) {
         fp.setDate(new Date(Number(y), Number(m) - 1, 1), true);
@@ -2097,10 +2164,14 @@
       // Finish this whole section before starting the next one. If it stopped
       // part-way (a slow save, an Add that hadn't come back yet), settle and go
       // again: entries already on the page are skipped, so only the rest is added.
+      // A form that has filled some entries and then shows no Add button is full
+      // (some allow only five jobs), so waiting and trying again can't help. The
+      // retries never overwrite, or they would type every entry out again.
+      const full = (res) => res.blocks > 0 && /no "Add" button/.test(res.stoppedBecause || '');
       let r = await run({ ...opts, kind, items, quiet: true, keepMarks: true });
-      for (let again = 0; again < 3 && r.found && r.stoppedBecause && !/would not save/.test(r.stoppedBecause); again++) {
+      for (let again = 0; again < 3 && r.found && r.stoppedBecause && !/would not save/.test(r.stoppedBecause) && !full(r); again++) {
         await quiet(500, 3000);
-        const next = await run({ ...opts, kind, items, quiet: true, keepMarks: true });
+        const next = await run({ ...opts, overwrite: false, kind, items, quiet: true, keepMarks: true });
         next.log = [...(r.log || []), ...(next.log || [])];
         next.filled += r.filled;
         next.blocks += r.blocks;
@@ -2128,10 +2199,12 @@
 
     // Pages sometimes redraw and wipe a field after it was filled. Look again,
     // and fill whatever came back empty. Fields that kept their value are
-    // skipped, so this is quick.
+    // skipped, so this is quick. It never overwrites: "Replace values already
+    // in the form" applies to the first pass, and typing everything twice would
+    // only confuse.
     await quiet(700, 3000);
     // Say so when a section wasn't found, but only from a frame that did fill something.
-    for (const again of await fillPass({ ...opts, keepMarks: true, reportMissing: results.length > 0 }, profile)) {
+    for (const again of await fillPass({ ...opts, overwrite: false, keepMarks: true, reportMissing: results.length > 0 }, profile)) {
       const first = results.find((r) => r.kind === again.kind);
       if (!first) {
         results.push(again);

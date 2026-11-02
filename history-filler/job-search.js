@@ -3,6 +3,7 @@
 (() => {
   const ART = 'art';
   const TECH = 'tech';
+  const HEALTH = 'health';
 
   // Every entry was checked against the live list, since a slug can belong to
   // someone unexpected ("bethesda" is a physical therapy office).
@@ -39,6 +40,11 @@
     ['ashby', 'pika', 'Pika', TECH],
     ['ashby', 'runway', 'Runway', TECH],
     ['lever', 'spotify', 'Spotify', TECH],
+    ['greenhouse', 'twochairs', 'Two Chairs', HEALTH],
+    ['greenhouse', 'charliehealth', 'Charlie Health', HEALTH],
+    ['ashby', 'headway', 'Headway', HEALTH],
+    ['ashby', 'sondermind', 'SonderMind', HEALTH],
+    ['lever', 'lyrahealth', 'Lyra Health', HEALTH],
   ].map(([platform, slug, name, group]) => ({ platform, slug, name, group }));
 
   // Spreadsheets of open jobs, read as plain data at search time. None ship
@@ -261,7 +267,16 @@
     cgi: ['cg'],
     modeler: ['modeller'],
     modeller: ['modeler'],
+    // Licenses stand for the job, which titles spell out.
+    lmsw: ['lcsw', 'lsw', 'licsw', 'msw'],
+    lcsw: ['lmsw', 'lsw', 'licsw', 'msw'],
+    lsw: ['lmsw', 'lcsw', 'licsw', 'msw'],
+    licsw: ['lmsw', 'lcsw', 'lsw', 'msw'],
+    msw: ['lmsw', 'lcsw', 'lsw', 'licsw'],
   };
+  // Feeds search by keyword and know nothing of licenses, so ask them for the job.
+  const LICENSES = /\b(lmsw|lcsw|lsw|licsw|msw)(-[a-z])?\b/gi;
+  const expandQuery = (text) => String(text || '').replace(LICENSES, 'social worker');
   // Related but not the same, so they rank below the word itself.
   const NEAR = {
     animator: ['animation', 'animations'],
@@ -281,7 +296,7 @@
 
   // How well a title fits, from 0 to 1. 1 means every word that matters is there.
   function scoreTitle(title, query) {
-    const asked = words(query).filter((w) => !FILLER.has(w));
+    const asked = words(expandQuery(query)).filter((w) => !FILLER.has(w));
     if (!asked.length) return 0;
     const have = words(title);
     let total = 0;
@@ -346,7 +361,7 @@
 
   // The one word most worth asking a keyword search for.
   function distinctiveWord(query) {
-    const sig = words(query).filter((w) => !FILLER.has(w) && !LEVEL.has(w));
+    const sig = words(expandQuery(query)).filter((w) => !FILLER.has(w) && !LEVEL.has(w));
     const narrow = sig.filter((w) => !BROAD.has(w));
     return [...(narrow.length ? narrow : sig)].sort((a, b) => b.length - a.length)[0] || '';
   }
@@ -410,12 +425,12 @@
           if (!response.ok) throw new Error(`${response.status}`);
           return (await response.json()).results || [];
         };
-        const keyed = `adzuna:${country}:${where}:${title}`;
+        const keyed = `adzuna:${country}:${where}:${expandQuery(title)}`;
         return cached(store, keyed, HOUR, async () => {
           // Every word must match first. If that finds little, any word will do.
-          let rows = await call({ what: title });
+          let rows = await call({ what: expandQuery(title) });
           if (rows.length < 10) {
-            const any = words(title).filter((w) => !FILLER.has(w) && !LEVEL.has(w)).join(' ');
+            const any = words(expandQuery(title)).filter((w) => !FILLER.has(w) && !LEVEL.has(w)).join(' ');
             if (any) rows = [...rows, ...await call({ what_or: any })];
           }
           const seen = new Set();
