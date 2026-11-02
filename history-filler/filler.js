@@ -362,7 +362,14 @@
     return null;
   }
 
-  const humanOf = (d) => (d.raw.length > 60 || d.raw.includes('?') ? '' : d.human);
+  // "What is your full name?" is a plain label worded as a question; longer or
+  // wider questions are screening questions and carry no contact label.
+  const SIMPLE_ASK = /^\s*(?:what(?:'s|’s| is| are)|please enter|enter)\s+your\s+([^?]{2,40})\??[\s*✱∗]*/i;
+  const humanOf = (d) => {
+    const ask = d.raw.match(SIMPLE_ASK);
+    if (ask && d.raw.split('?').length <= 2) return norm(ask[1]);
+    return d.raw.length > 60 || d.raw.includes('?') ? '' : d.human;
+  };
 
   // The section a heading starts. Headings like "Apply for this job" name no
   // section but still end one, so "Experience" in a job ad above the form
@@ -1423,6 +1430,8 @@
     taught: YES_NO,
     over18: YES_NO,
     priorEmployment: YES_NO,
+    knowEmployee: YES_NO,
+    certify: YES_NO,
     // Patterns are tried in this order, so LinkedIn wins if it's offered at all.
     heardAbout: { 'LinkedIn, then Indeed, then Other': ['LinkedIn', /linked ?in/, /\bindeed\b/, /^other\b/] },
     pronouns: {
@@ -1444,6 +1453,7 @@
     reside: 'Lives in the US', workAuth: 'Work authorization', sponsorship: 'Sponsorship',
     workNoSponsor: 'Work authorization', relocate: 'Relocation', over18: 'Over 18', pronouns: 'Pronouns',
     priorEmployment: 'Worked for this company',
+    knowEmployee: 'Related to an employee', certify: 'Application is true and correct',
     heardAbout: 'How you heard about the job',
   };
   // Order matters: "transgender" contains "gender".
@@ -1460,6 +1470,8 @@
     ['pronouns', /pronoun/],
     // About this employer, not a kind of employer: "worked at a studio" and
     // "worked with Houdini" are real questions with other answers.
+    ['certify', /\b(certify|certifying|certification)\b.*\b(true|correct|accurate)\b|\btrue and (correct|accurate|complete)\b/],
+    ['knowEmployee', /\b(related to|relationship with|relatives?|family members?|spouses?|domestic partners?)\b.*\b(works?|working|employed|employees?)\b/],
     ['priorEmployment', /\b(have|did) you\b.*\bwork(ed)?\b.*\b(for|at)\b(?! (a|an)\b)|\bpreviously (worked|employed)\b|\b(been|ever) employed (by|at)\b(?! (a|an)\b)|\b(currently|now)\b.*\b(work|working|employed)\b.*\b(for|at|by)\b(?! (a|an)\b)|\b(former|current) (employee|contractor)\b/],
     ['transgender', /transgender/],
     ['orientation', /sexual orientation/],
@@ -1474,14 +1486,14 @@
   const questionText = new WeakMap();
 
   // True when the question names a company in the person's job history, so
-  // "No" could be false. "Acme (Labs, Staffing)" counts as all three.
+  // "No" could be false. "Meta (Reality Labs, Aquent)" counts as all three.
   function namesPastEmployer(question, employers) {
     const q = norm(question);
     for (const job of employers || []) {
       for (const part of String(job.company || '').split(/[(),&/]/)) {
         const name = norm(part);
         if (name.length < 3) continue;
-        // "Acme Placement" should still match a question that just says "Acme".
+        // "Aquent Placement" should still match a question that just says "Aquent".
         const first = name.split(' ')[0];
         const useFirst = first.length >= 4 && !/^(the|new|first|global|united|american|national|group|international)$/.test(first);
         for (const n of useFirst ? [name, first] : [name]) {
@@ -1666,6 +1678,8 @@
     }
     const prior = saved.priorEmployment === undefined ? 'No' : saved.priorEmployment;
     if (prior) wanted.priorEmployment = [prior];
+    wanted.knowEmployee = [saved.knowEmployee || 'No'];
+    wanted.certify = [saved.certify || 'Yes'];
     const heard = saved.heardAbout === undefined ? 'LinkedIn, then Indeed, then Other' : saved.heardAbout;
     if (heard) wanted.heardAbout = [heard];
     if (!Object.keys(wanted).length) return res;
