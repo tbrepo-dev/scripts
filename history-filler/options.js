@@ -47,6 +47,7 @@ const CONTACT_FIELDS = [
   { key: 'phone', label: 'Phone' },
   { key: 'address', label: 'Street address' },
   { key: 'city', label: 'City' },
+  { key: 'county', label: 'County' },
   { key: 'state', label: 'State' },
   { key: 'zip', label: 'ZIP / postal code' },
   { key: 'country', label: 'Country' },

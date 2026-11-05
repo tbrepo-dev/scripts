@@ -328,6 +328,8 @@
       ['lever', /jobs(?:\.eu)?\.lever\.co\/([\w-]+)/i],
       ['ashby', /jobs\.ashbyhq\.com\/([\w.-]+)/i],
     ];
+    // Companies whose own careers page is really a Greenhouse list underneath.
+    if (/^https?:\/\/(www\.)?epicgames\.com\/(site\/)?careers/i.test(url)) return { platform: 'greenhouse', slug: 'epicgames' };
     for (const [platform, re] of patterns) {
       const m = re.exec(url);
       if (m && m[1].toLowerCase() !== 'embed') return { platform, slug: m[1].toLowerCase() };

@@ -3,7 +3,7 @@
 (() => {
   // A tab keeps the copy it was first given even after the extension is reloaded,
   // so a newer build replaces the old one instead of being ignored.
-  const BUILD = "2026-11-02.6";
+  const BUILD = "2026-11-04.16";
   if (window.__HF && window.__HF.build === BUILD) return;
 
   const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July',
@@ -15,7 +15,8 @@
     'button[aria-haspopup=listbox]', '[role=combobox]:not(input,select)',
   ].join(',');
   // SmartRecruiters' autocomplete lists are <spl-select-option> elements with no role.
-  const OPTION_SEL = '[role=option],spl-select-option';
+  // react-select's older releases draw options with no role, only an id like react-select-3-option-0.
+  const OPTION_SEL = '[role=option],spl-select-option,[id^="react-select-"][id*="-option-"]';
   const HEADING_SEL = 'h1,h2,h3,h4,h5,h6,[role=heading],legend';
 
   // Keys that say which kind of block a field belongs to. Everything else
@@ -29,7 +30,7 @@
   // own they could as easily be the applicant's own details.
   const EMP_PLACE_KEYS = new Set(['city', 'state', 'location', 'empAddress', 'empZip', 'empPhone', 'empArea', 'empCountry']);
   const CONTACT_KEYS = new Set(['firstName', 'lastName', 'fullName', 'email', 'phone', 'address',
-    'zip', 'country', 'linkedin', 'website', 'portfolio', 'github', 'skills']);
+    'zip', 'county', 'country', 'linkedin', 'website', 'portfolio', 'github', 'skills']);
 
   // A heading matching this ends the current block.
   const SECTION_BREAK = /contact|personal|address|education|school|employ|work (history|experience)|experience|skills|references?|certif|licen[sc]e|language|military|veteran|disability|equal|voluntary|demographic|additional|resume|cover letter|links|questions|eligibility/i;
@@ -96,6 +97,9 @@
     return a;
   }
 
+  // What an empty dropdown shows, which says nothing about what it asks.
+  const PLACEHOLDER = /^(select|choose|enter)[ ...]*$/i;
+
   // Text of a node without the text of any controls inside it (a <label>
   // wrapping a <select> would otherwise include every option).
   function textOf(node) {
@@ -128,7 +132,8 @@
       for (let n = 0; sib && n < 4; n++, sib = sib.previousSibling) {
         if (hasControls(sib)) break;
         const t = textOf(sib);
-        if (t && t.length < 60) out.push(t);
+        // A dropdown's own "Select" placeholder is not its label.
+        if (t && t.length < 60 && !PLACEHOLDER.test(t)) out.push(t);
       }
       node = node.parentElement;
     }
@@ -147,7 +152,7 @@
       for (let sib = node.previousElementSibling, n = 0; sib && n < 3; sib = sib.previousElementSibling, n++) {
         if (hasControls(sib)) break;
         const t = textOf(sib);
-        if (t && t.length < 80) return t;
+        if (t && t.length < 80 && !PLACEHOLDER.test(t)) return t;
       }
     }
     return '';
@@ -347,7 +352,7 @@
     if (/^(full |your |legal )?name\b/.test(t)) return 'fullName';
     if (/e ?mail/.test(t)) return 'email';
     if (/area code/.test(t)) return 'phoneArea';
-    if (/country code|dial(l?ing)? code/.test(t)) return 'phoneCountry';
+    if (/country code|dial(l?ing)? code|calling code|phone ?country/.test(t)) return 'phoneCountry';
     if (/phone|mobile|\bcell\b/.test(t)) return 'phone';
     if (/linked ?in/.test(t)) return 'linkedin';
     if (/portfolio/.test(t)) return 'portfolio';
@@ -357,6 +362,7 @@
     if (/street|address/.test(t)) return 'address';
     if (/prefer|desired/.test(t)) return null;
     if (/\bcity\b|\btown\b/.test(t)) return 'city';
+    if (/\bcounty\b/.test(t)) return 'county';
     if (/\bstate\b|\bprovince\b/.test(t)) return 'state';
     if (/\bzip\b|postal|postcode/.test(t)) return 'zip';
     if (/\bcountry\b/.test(t)) return 'country';
@@ -439,7 +445,9 @@
       blocks.push(cur);
     };
     for (const node of deepAll(`${CONTROL_SEL},${HEADING_SEL}`)) {
-      if (node.closest('[data-hf-ui]') || !isVisible(node)) continue;
+      // react-select leaves a hidden "required" box beside each dropdown; it would
+      // read as a second School and cut the real one off from its block.
+      if (node.closest('[data-hf-ui]') || !isVisible(node) || isDecoy(node)) continue;
       if (node.matches(HEADING_SEL) && !node.matches(CONTROL_SEL)) {
         const t = textOf(node);
         // "Employment dates" inside a job shouldn't split it; only a change of
@@ -518,7 +526,8 @@
     return found;
   }
 
-  const ADD_TEXT = /^\W*add( another| more| new)?( entry| item| row| section| one)?\W*$/i;
+  // "Add", "Add another", or "Add another education" (sites name the section).
+  const ADD_TEXT = /^\W*add( another| more| new)?( entry| item| row| section| one| education| school| degree| employer| employment| job| position| experience| reference)?\W*$/i;
   const parentOf = (n) => n.parentElement || (n.getRootNode && n.getRootNode().host) || null;
   const buttonText = (el) => (el.getAttribute('aria-label') || el.innerText || el.value || el.textContent || '')
     .replace(/\s+/g, ' ').trim();
@@ -650,16 +659,28 @@
   }
 
   function matchOption(texts, candidates, strict) {
-    const lower = texts.map((t) => norm(t));
+    // "Bachelor's Degree" and "Bachelors" should meet, so apostrophes don't count.
+    const nz = (t) => norm(t).replace(/['’`]/g, '');
+    const lower = texts.map((t) => nz(t));
     // Country lists often read "🇺🇸 (+1) United States"; compare the bare name too.
-    const bare = texts.map((t) => norm(String(t).replace(/^[^\p{L}\p{N}(+]+/u, '').replace(/\(\+[\d\s]+\)\s*/, '')));
+    // Some lists (react-select country pickers) read "United StatesUnited States+1":
+    // the name twice, then the code. Drop the code and the repeat.
+    const plain = (t) => {
+      const words = nz(String(t).replace(/^[^\p{L}\p{N}(+]+/u, '').replace(/\(\+[\d\s]+\)\s*/, '')).replace(/\s*\+\d+$/, '').split(' ');
+      const half = words.length / 2;
+      if (Number.isInteger(half) && half > 0 && words.slice(0, half).join(' ') === words.slice(half).join(' ')) return words.slice(0, half).join(' ');
+      // The name twice with no space between ("United StatesUnited States").
+      const glued = /^(.{3,}?)\s*\1$/.exec(words.join(' '));
+      return glued ? glued[1] : words.join(' ');
+    };
+    const bare = texts.map(plain);
     const words = candidates.filter((c) => typeof c === 'string');
     for (const c of words) {
-      const i = lower.indexOf(norm(c));
+      const i = lower.indexOf(nz(c));
       if (i >= 0) return i;
     }
     for (const c of words) {
-      const i = bare.indexOf(norm(c));
+      const i = bare.indexOf(nz(c));
       if (i >= 0) return i;
     }
     // Patterns say what an answer means, for wordings nobody listed.
@@ -671,7 +692,7 @@
     }
     if (strict) return -1;
     for (const c of words) {
-      const n = norm(c);
+      const n = nz(c);
       if (n.length < 4 || /^\d+$/.test(n)) continue;
       let i = lower.findIndex((t) => t.startsWith(n) || n.startsWith(t) && t.length >= 4);
       if (i < 0) i = lower.findIndex((t) => t.includes(n));
@@ -743,8 +764,8 @@
   // Opens a custom dropdown and clicks the option that matches. Many of these
   // redraw their list as you type, so options are read again after the typing
   // settles; the ones read before it are gone from the page by then.
-  async function pickFromListbox(el, candidates, typed, strict) {
-    const result = await pickOpen(el, candidates, typed, strict);
+  async function pickFromListbox(el, candidates, typed, strict, fallback) {
+    const result = await pickOpen(el, candidates, typed, strict, fallback);
     await closeList(el);
     return result;
   }
@@ -766,7 +787,7 @@
     }
   }
 
-  async function pickOpen(el, candidates, typed, strict) {
+  async function pickOpen(el, candidates, typed, strict, fallback) {
     const owned = () => {
       const id = el.getAttribute('aria-controls') || el.getAttribute('aria-owns');
       const list = id && byId(el, id);
@@ -791,8 +812,8 @@
       };
       return deepAll(OPTION_SEL).filter((o) => isVisible(o) && !besideOther(o));
     };
-    const choose = async (list) => {
-      const i = matchOption(list.map((o) => o.innerText || o.textContent), candidates, strict);
+    const choose = async (list, cands = candidates, strictly = strict) => {
+      const i = matchOption(list.map((o) => o.innerText || o.textContent), cands, strictly);
       if (i < 0) return false;
       // <spl-select-option> picks on a plain click; the full pointer sequence
       // leaves its menu open with the text typed but nothing chosen.
@@ -813,16 +834,28 @@
     if (typing) {
       type(typed);
       // Some lists (job titles) take a second or more to come back with options.
+      // Lists that search as you type first show the old list, then the filtered
+      // one. Clicking the old list's entry does nothing, so wait until the list
+      // stops changing (twice the same) before choosing.
+      let before = null;
       for (let tries = 0; tries < 12; tries++) {
         await sleep(350);
-        if (await choose(owned())) return true;
+        const now = owned();
+        const seen = now.map((o) => o.textContent).join('|');
+        const settled = seen === before || tries >= 4;
+        before = seen;
+        if (settled && await choose(now)) return true;
       }
       // The typed text may match nothing the way the site spells it, so try
       // the full list.
       type('');
       await sleep(350);
       if (await choose(owned())) return true;
+      // Nothing like it in the full list: take the fallback ("Other") from the same open list.
+      if (fallback && await choose(owned(), fallback, true)) return true;
     } else if (opened && await choose(opened)) {
+      return true;
+    } else if (opened && fallback && await choose(opened, fallback, true)) {
       return true;
     }
     const esc = { key: 'Escape', code: 'Escape', bubbles: true };
@@ -883,6 +916,9 @@
       if (us && block && block.fields.empArea) return { text: `${digits10.slice(3, 6)}-${digits10.slice(6)}` };
       return item.phone ? { text: item.phone } : null;
     }
+    // A dropdown of fields of study that doesn't list this one gets "Other".
+    // With nothing written in the profile, a dropdown still gets "Other"; a typing box is left alone.
+    if (key === 'field') return item.field ? { text: String(item.field), other: true } : { text: 'Other', other: true, listOnly: true, strict: true };
     return item[key] ? { text: String(item[key]) } : null;
   }
 
@@ -893,6 +929,8 @@
       const o = el.options[el.selectedIndex];
       return !o || !o.value || /^\W*(select|choose|please|month|year)/i.test(o.text);
     }
+    // A phone box that shows only its country code ("+1") has no number yet.
+    if (el.tagName === 'INPUT' && el.type === 'tel' && /^\+\d{1,3}\s*$/.test(el.value.trim())) return true;
     if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') return !el.value.trim();
     const t = (el.innerText || el.textContent || '').trim();
     return !t || (el.tagName === 'BUTTON' && /^(select|choose)/i.test(t));
@@ -1061,9 +1099,10 @@
         }
       }
     }
-    if (el.tagName === 'SELECT') return setSelect(el, candidates, value.strict);
+    if (value.listOnly && el.tagName !== 'SELECT' && !isListboxWidget(el)) return false;
+    if (el.tagName === 'SELECT') return setSelect(el, candidates, value.strict) || (!!value.other && setSelect(el, ['Other'], true));
     if (isListboxWidget(el)) {
-      const picked = await pickFromListbox(el, candidates, typed, value.strict);
+      const picked = await pickFromListbox(el, candidates, typed, value.strict, value.other ? ['Other', 'Other (not listed)', 'Not listed'] : null);
       // SmartRecruiters reflects a committed choice onto the <spl-autocomplete>'s
       // value attribute. Text sitting in the box without it is not saved.
       const acHost = autocompleteHost(el);
@@ -1102,6 +1141,7 @@
 
   function mark(el, ok) {
     el.dataset.hfMarked = '1';
+    el.dataset.hfOk = ok ? '1' : '0';
     el.style.outline = `2px solid ${ok ? '#2e9e5b' : '#e0932b'}`;
     el.style.outlineOffset = '1px';
     el.addEventListener('focus', () => {
@@ -1121,7 +1161,7 @@
     firstName: 'First name', preferredName: 'Preferred name', lastName: 'Last name', fullName: 'Full name', email: 'Email',
     empAddress: 'Employer street address', empZip: 'Employer ZIP', empPhone: 'Employer phone',
     empArea: 'Employer area code', empCountry: 'Employer country',
-    phone: 'Phone', phoneArea: 'Phone area code', phoneCountry: 'Phone country code', address: 'Street address', zip: 'ZIP / postal code', country: 'Country',
+    phone: 'Phone', phoneArea: 'Phone area code', phoneCountry: 'Phone country code', address: 'Street address', zip: 'ZIP / postal code', county: 'County', country: 'Country',
     linkedin: 'LinkedIn', website: 'Website', portfolio: 'Portfolio', github: 'GitHub', skills: 'Skills',
     currentCompany: 'Current company', currentTitle: 'Current job title',
     coverLetter: 'Cover letter', salary: 'Desired salary',
@@ -1338,6 +1378,13 @@
       blocks = scanKind(opts.kind, siteMap);
       if (at >= blocks.length) {
         // Add can stay greyed out for a few seconds after a Save, so wait for it.
+        // A click that already produced nothing won't start working by repeating it.
+        const failed = (window.__hfAddFailed || {})[opts.kind];
+        if (failed && Date.now() - failed < 120000) {
+          res.stoppedBecause = 'clicking "Add" did not produce a new set of fields';
+          note(i, 'Add gave no fields');
+          break;
+        }
         const add = await waitFor(() => findAdd(opts.kind, scanKind(opts.kind, siteMap)), 10000);
         if (!add) {
           res.stoppedBecause = 'no "Add" button found';
@@ -1351,6 +1398,7 @@
           grown = await waitFor(() => scanKind(opts.kind, siteMap).length > at, click ? 5000 : 6000);
         }
         if (!grown) {
+          (window.__hfAddFailed = window.__hfAddFailed || {})[opts.kind] = Date.now();
           res.stoppedBecause = 'clicking "Add" did not produce a new set of fields';
           note(i, 'Add gave no fields');
           break;
@@ -1466,6 +1514,8 @@
     "I don't wish to answer", 'I do not wish to disclose', "I don't wish to disclose", 'I do not want to answer',
     "I don't want to answer", 'Choose not to answer', 'Decline', /disclose|prefer not|decline|(do not|don't|dont) (wish|want)|not (to )?(answer|say|state)/];
   const YES_NO = { Yes: ['Yes', /^yes\b/], No: ['No', /^no\b/] };
+  // Confirmations and notices often offer one choice, "I Acknowledge / I Agree", instead of Yes.
+  const AGREE = { Yes: ['Yes', 'I Acknowledge / I Agree', /^yes\b|^(?!.*\b(not|disagree)\b).*(acknowledg|\bagree|\baccept)/i], No: ['No', /^no\b/] };
   const SELF_ANSWERS = {
     gender: {
       Man: ['Man', 'Male', /^(cis\w* )?(man|male)\b/], Woman: ['Woman', 'Female', /^(cis\w* )?(woman|female)\b/], 'Non-binary': ['Non-binary', 'Nonbinary', 'Non binary', /\bnon ?binary\b/],
@@ -1498,7 +1548,8 @@
     over18: YES_NO,
     priorEmployment: YES_NO,
     knowEmployee: YES_NO,
-    certify: YES_NO,
+    certify: AGREE,
+    consent: AGREE,
     // Patterns are tried in this order, so LinkedIn wins if it's offered at all.
     heardAbout: { 'LinkedIn, then Indeed, then Other': ['LinkedIn', /linked ?in/, /\bindeed\b/, /^other\b/] },
     pronouns: {
@@ -1520,7 +1571,7 @@
     reside: 'Lives in the US', workAuth: 'Work authorization', sponsorship: 'Sponsorship',
     workNoSponsor: 'Work authorization', relocate: 'Relocation', over18: 'Over 18', pronouns: 'Pronouns',
     priorEmployment: 'Worked for this company',
-    knowEmployee: 'Related to an employee', certify: 'Application is true and correct',
+    knowEmployee: 'Related to an employee', certify: 'Application is true and correct', consent: 'Privacy notice acknowledged',
     heardAbout: 'How you heard about the job',
   };
   // Order matters: "transgender" contains "gender".
@@ -1537,6 +1588,7 @@
     ['pronouns', /pronoun/],
     // About this employer, not a kind of employer: "worked at a studio" and
     // "worked with Houdini" are real questions with other answers.
+    ['consent', /\b(acknowledg|agree|consent|accept)\w*\b.*\b(privacy|terms|policy|notice|conditions)\b|\b(privacy|terms)\s(notice|policy|and conditions)\b.*\b(acknowledg|agree|accept|read)\w*/],
     ['certify', /\b(certify|certifying|certification)\b.*\b(true|correct|accurate)\b|\btrue and (correct|accurate|complete)\b/],
     ['knowEmployee', /\b(related to|relationship with|relatives?|family members?|spouses?|domestic partners?)\b.*\b(works?|working|employed|employees?)\b/],
     ['priorEmployment', /\b(have|did) you\b.*\bwork(ed)?\b.*\b(for|at)\b(?! (a|an)\b)|\bpreviously (worked|employed)\b|\b(been|ever) employed (by|at)\b(?! (a|an)\b)|\b(currently|now)\b.*\b(work|working|employed)\b.*\b(for|at|by)\b(?! (a|an)\b)|\b(former|current) (employee|contractor)\b/],
@@ -1603,7 +1655,8 @@
       const fs = el.closest('fieldset');
       if (fs && fs.querySelector('legend')) texts.push(textOf(fs.querySelector('legend')));
       let node = el;
-      for (let level = 0; level < 7 && node && node !== document.body; level++) {
+      // Styled-component forms (Epic) nest a dropdown nine or ten levels below its question.
+      for (let level = 0; level < 12 && node && node !== document.body; level++) {
         let sib = node.previousElementSibling;
         for (let n = 0; sib && n < 40; n++, sib = sib.previousElementSibling) {
           if (!hasControls(sib)) texts.push(textOf(sib));
@@ -1613,7 +1666,7 @@
     }
     // The question sits right above its options. Further away is another topic,
     // so "How did you hear about us?" doesn't inherit a heading above it.
-    return own ? texts : texts.filter(Boolean).slice(0, 2);
+    return own ? texts : texts.filter((t) => t && !PLACEHOLDER.test(String(t).trim())).slice(0, 2);
   }
 
   // Answers the person taught, by what the question says.
@@ -1747,6 +1800,7 @@
     if (prior) wanted.priorEmployment = [prior];
     wanted.knowEmployee = [saved.knowEmployee || 'No'];
     wanted.certify = [saved.certify || 'Yes'];
+    wanted.consent = [saved.consent || 'Yes'];
     const heard = saved.heardAbout === undefined ? 'LinkedIn, then Indeed, then Other' : saved.heardAbout;
     if (heard) wanted.heardAbout = [heard];
     if (!Object.keys(wanted).length) return res;
@@ -1907,7 +1961,9 @@
     values.website = contact.website || contact.portfolio;
     const place = [contact.city, contact.state].filter(Boolean).join(', ');
     if (place) values.location = place;
-    const currentJob = ((opts.profile || {}).employers || []).find((job) => job.current);
+    // "Current employer" is the job marked current, or else the most recent one: the profile lists newest first.
+    const employers = (opts.profile || {}).employers || [];
+    const currentJob = employers.find((job) => job.current) || employers[0];
     if (currentJob) {
       values.currentCompany = currentJob.company;
       values.currentTitle = currentJob.title;
@@ -1967,6 +2023,10 @@
         }
         if (node.tagName === 'BUTTON' && !phoneButtons.has(node) && !node.matches(CONTROL_SEL)) continue;
         if (inBlock.has(node) || node.type === 'checkbox' || section === 'emp' || section === 'edu' || section === 'ref') continue;
+        // A dropdown already answered shows its answer where the label search looks ("LinkedIn"
+        // from "How did you hear"), so don't take it for the LinkedIn box on the next pass.
+        // A mark that says it failed or was empty is not an answer: a later run should try that box again.
+        if (node.dataset.hfMarked && isListboxWidget(node) && node.dataset.hfOk !== '0') continue;
         const d = describe(node);
         const mapped = siteMap[signature(node, d)];
         if (mapped === 'ignore') continue;
@@ -1979,7 +2039,20 @@
           // "Link to a portfolio, personal website, or other demonstrated work"
           // still just wants the portfolio.
           || (d.raw.length < 150 && /portfolio|\breel\b|art ?station/.test(d.human) ? 'portfolio' : null);
-        const value = key && contactValue(values, key);
+        let value = key && contactValue(values, key);
+        // Phone boxes that start with a country code ("+1", with a flag beside
+        // them) read digits typed after it as part of the code, so a US number
+        // typed bare turns into +31, the Netherlands. Give them the whole number.
+        if (key === 'phone' && node.type === 'tel' && /^\+\d/.test(node.value.trim()) && digits10.length === 10) {
+          value = `+1${digits10}`;
+        }
+        // The flag already shows the country wanted, so leave the list alone.
+        if (key === 'phoneCountry' && phoneButtons.has(node) && /united states/i.test(node.getAttribute('aria-label') || node.textContent || '')) {
+          filled.add(node);
+          res.found = true;
+          mark(node, true);
+          continue;
+        }
         if (key === 'coverLetter' && !value && !filled.has(node)) {
           // A text box is waiting for a letter we don't have.
           filled.add(node);
@@ -2086,8 +2159,20 @@
       },
     }[role];
     const all = deepAll('input[type=file]');
-    if (all.some((el) => el.files.length && (labelled(el) || nearby(el)))) return null; // already attached
-    const open = all.filter((el) => !el.disabled && !el.files.length);
+    // A box named for the other kind of file doesn't count: Epic tags its resume
+    // box "resume-or-cover", which made an attached resume look like the letter.
+    const otherKind = (el) => role === 'cover' ? RESUME.test(own(el)) && !/cover/.test(own(el)) : /cover/.test(own(el)) && !RESUME.test(own(el));
+    // A box that holds a file but shows an upload error beside it was refused by the page, so it isn't attached.
+    const refusedByPage = (el) => {
+      let node = el.parentElement;
+      for (let level = 0; level < 6 && node && node !== document.body; level++, node = node.parentElement) {
+        const text = node.textContent || '';
+        if (text.length < 600 && /cannot read propert|uploadfile|upload failed/i.test(text)) return true;
+      }
+      return false;
+    };
+    if (all.some((el) => el.files.length && !refusedByPage(el) && !otherKind(el) && (labelled(el) || nearby(el)))) return null; // already attached
+    const open = all.filter((el) => !el.disabled && (!el.files.length || refusedByPage(el)));
     const lone = role === 'resume' && all.length === 1 && open.length === 1 && !NOT_RESUME.test(own(open[0]));
     // A field named for it beats one that only sits near the word. An "autofill
     // from resume" box only reads the file, so it comes after the real field.
@@ -2169,7 +2254,7 @@
       // retries never overwrite, or they would type every entry out again.
       const full = (res) => res.blocks > 0 && /no "Add" button/.test(res.stoppedBecause || '');
       let r = await run({ ...opts, kind, items, quiet: true, keepMarks: true });
-      for (let again = 0; again < 3 && r.found && r.stoppedBecause && !/would not save/.test(r.stoppedBecause) && !full(r); again++) {
+      for (let again = 0; again < 3 && r.found && r.stoppedBecause && !/would not save|did not produce/.test(r.stoppedBecause) && !full(r); again++) {
         await quiet(500, 3000);
         const next = await run({ ...opts, overwrite: false, kind, items, quiet: true, keepMarks: true });
         next.log = [...(r.log || []), ...(next.log || [])];
@@ -2364,5 +2449,5 @@
     return res;
   }
 
-  window.__HF = { run, runAll, markUpload, teach, scan, findOpenQuestions, putDrafts, build: BUILD };
+  window.__HF = { run, runAll, markUpload, hasUpload: (role) => !!findUpload(role), teach, scan, findOpenQuestions, putDrafts, build: BUILD };
 })();

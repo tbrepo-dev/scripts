@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "History Filler",
-  "version": "0.1.44",
+  "version": "0.1.60",
   "description": "Finds jobs and fills out applications from a profile stored on your computer. You review and submit each one.",
   "permissions": ["storage", "scripting"],
   "host_permissions": ["<all_urls>"],
