@@ -3,7 +3,7 @@
 (() => {
   // A tab keeps the copy it was first given even after the extension is reloaded,
   // so a newer build replaces the old one instead of being ignored.
-  const BUILD = "2026-11-04.16";
+  const BUILD = "2026-11-05.8";
   if (window.__HF && window.__HF.build === BUILD) return;
 
   const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July',
@@ -851,6 +851,43 @@
       type('');
       await sleep(350);
       if (await choose(owned())) return true;
+      // The site may spell it another way we know ("USA" for United States, "Georgia"
+      // for GA): type those too, since long lists only show what matches the typing.
+      const others = candidates.filter((c) => typeof c === 'string' && c.length > 1 && norm(c) !== norm(typed)).slice(0, 3);
+      // These lists can take a second or more to filter, so keep looking for a while.
+      for (const other of others) {
+        type(other);
+        for (let tries = 0; tries < 8; tries++) {
+          await sleep(350);
+          if (await choose(owned())) return true;
+        }
+      }
+      // Some lists (SuccessFactors) drop their options when the typed text matches
+      // nothing and don't bring them back when it's cleared: close, open again
+      // without typing, and choose from the whole list.
+      {
+        if (others.length) {
+          type('');
+          await sleep(200);
+        }
+        el.blur();
+        await sleep(300);
+        realClick(el);
+        const reopened = await waitFor(() => {
+          const o = owned();
+          return o.length ? o : null;
+        }, 1500);
+        if (reopened && await choose(reopened)) return true;
+        if (reopened && fallback && await choose(reopened, fallback, true)) return true;
+        // Long lists only show their first part, so "Others" may be out of sight: type it.
+        if (fallback) {
+          type(fallback[0]);
+          for (let tries = 0; tries < 8; tries++) {
+            await sleep(350);
+            if (await choose(owned(), fallback, true)) return true;
+          }
+        }
+      }
       // Nothing like it in the full list: take the fallback ("Other") from the same open list.
       if (fallback && await choose(owned(), fallback, true)) return true;
     } else if (opened && await choose(opened)) {
@@ -931,6 +968,8 @@
     }
     // A phone box that shows only its country code ("+1") has no number yet.
     if (el.tagName === 'INPUT' && el.type === 'tel' && /^\+\d{1,3}\s*$/.test(el.value.trim())) return true;
+    // A dropdown box showing "No Selection" or "Select…" has nothing chosen.
+    if (el.tagName === 'INPUT' && el.getAttribute('role') === 'combobox' && /^\W*(no selection|select|choose|please select)\b[\s.\u2026]*$/i.test(el.value.trim())) return true;
     if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') return !el.value.trim();
     const t = (el.innerText || el.textContent || '').trim();
     return !t || (el.tagName === 'BUTTON' && /^(select|choose)/i.test(t));
@@ -1100,9 +1139,9 @@
       }
     }
     if (value.listOnly && el.tagName !== 'SELECT' && !isListboxWidget(el)) return false;
-    if (el.tagName === 'SELECT') return setSelect(el, candidates, value.strict) || (!!value.other && setSelect(el, ['Other'], true));
+    if (el.tagName === 'SELECT') return setSelect(el, candidates, value.strict) || (!!value.other && setSelect(el, ['Other', 'Others'], true));
     if (isListboxWidget(el)) {
-      const picked = await pickFromListbox(el, candidates, typed, value.strict, value.other ? ['Other', 'Other (not listed)', 'Not listed'] : null);
+      const picked = await pickFromListbox(el, candidates, typed, value.strict, value.other ? ['Other', 'Others', 'Other (not listed)', 'Not listed'] : null);
       // SmartRecruiters reflects a committed choice onto the <spl-autocomplete>'s
       // value attribute. Text sitting in the box without it is not saved.
       const acHost = autocompleteHost(el);
@@ -1512,7 +1551,7 @@
   const DECLINE = ['I choose not to disclose', 'Choose not to disclose', 'Prefer not to say', 'Prefer not to answer',
     'Decline to self-identify', 'Decline to answer', 'Decline to state', 'I do not wish to answer',
     "I don't wish to answer", 'I do not wish to disclose', "I don't wish to disclose", 'I do not want to answer',
-    "I don't want to answer", 'Choose not to answer', 'Decline', /disclose|prefer not|decline|(do not|don't|dont) (wish|want)|not (to )?(answer|say|state)/];
+    "I don't want to answer", 'Choose not to answer', 'Decline', /disclose|prefer not|decline|opt ?out|(do not|don't|dont) (wish|want)|not (to )?(answer|say|state)/];
   const YES_NO = { Yes: ['Yes', /^yes\b/], No: ['No', /^no\b/] };
   // Confirmations and notices often offer one choice, "I Acknowledge / I Agree", instead of Yes.
   const AGREE = { Yes: ['Yes', 'I Acknowledge / I Agree', /^yes\b|^(?!.*\b(not|disagree)\b).*(acknowledg|\bagree|\baccept)/i], No: ['No', /^no\b/] };
@@ -2158,7 +2197,8 @@
         return /cover/.test(a.words) || /cover letter|coverletter/.test(a.hints);
       },
     }[role];
-    const all = deepAll('input[type=file]');
+    // SuccessFactors popup boxes belong to one tile each; markUpload opens the right one.
+    const all = deepAll('input[type=file]').filter((el) => !/^\d+:_file$/.test(el.id));
     // A box named for the other kind of file doesn't count: Epic tags its resume
     // box "resume-or-cover", which made an attached resume look like the letter.
     const otherKind = (el) => role === 'cover' ? RESUME.test(own(el)) && !/cover/.test(own(el)) : /cover/.test(own(el)) && !RESUME.test(own(el));
@@ -2189,9 +2229,53 @@
 
   // Tags the field so a script in the page's own world can find it. Upload code
   // on some sites fails on files handed over from this isolated world.
-  function markUpload(role) {
-    const target = findUpload(role);
-    if (!target) return false;
+  // SuccessFactors shows each upload as a tile with no file box in it. Its "+"
+  // icon opens an "Upload from Device" popup, and the file box lives in there.
+  // Returns the tile's "+" icon for this kind of file, if it is still empty.
+  function sapTile(role) {
+    for (const icon of deepAll('[id$="_attachIcon"]')) {
+      let box = icon.parentElement;
+      let words = '';
+      for (let level = 0; level < 8 && box && box !== document.body; level++, box = box.parentElement) {
+        // The nearest text that names a kind of file: the tile's own prompt
+        // ("Upload a Resume") or its label, before the row that holds both tiles.
+        const t = textOf(box).toLowerCase();
+        if (t.length > 300) break;
+        if (/resume|r.sum.|\bcv\b|cover letter/.test(t)) {
+          words = t;
+          break;
+        }
+      }
+      const isResume = /resume|r.sum.|\bcv\b/.test(words) && !/cover/.test(words);
+      const isCover = /cover letter/.test(words);
+      if (role === 'resume' ? !isResume : !isCover) continue;
+      // A file already uploaded shows its name (the download label) instead of the prompt.
+      const id = icon.id.replace(/_attachIcon$/, '');
+      const shown = document.getElementById(`${id}_attachDownloadLabel`);
+      if (shown && !/displayNone/.test(shown.className)) return null;
+      return icon;
+    }
+    return null;
+  }
+
+  async function markUpload(role) {
+    let target = findUpload(role);
+    if (!target) {
+      const icon = sapTile(role);
+      if (!icon) return false;
+      // Each tile has its own popup; its file box is named after the tile's
+      // number plus one ("57:" opens "58:_file").
+      const num = Number((/^(\d+):_attachIcon$/.exec(icon.id) || [])[1]);
+      const popupBoxes = () => deepAll('input[type=file]').filter((el) => isVisible(el) && /^\d+:_file$/.test(el.id));
+      const before = new Set(popupBoxes());
+      icon.click();
+      target = await waitFor(() => {
+        const exact = Number.isFinite(num) && document.getElementById(`${num + 1}:_file`);
+        if (exact && isVisible(exact)) return exact;
+        return popupBoxes().find((el) => !before.has(el)) || null;
+      }, 3000);
+      if (!target) return false;
+    }
     target.dataset.hfUpload = role;
     return true;
   }
@@ -2449,5 +2533,5 @@
     return res;
   }
 
-  window.__HF = { run, runAll, markUpload, hasUpload: (role) => !!findUpload(role), teach, scan, findOpenQuestions, putDrafts, build: BUILD };
+  window.__HF = { run, runAll, markUpload, hasUpload: (role) => !!(findUpload(role) || sapTile(role)), teach, scan, findOpenQuestions, putDrafts, build: BUILD };
 })();
